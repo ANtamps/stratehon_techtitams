@@ -1,0 +1,5 @@
+<RCC>
+  <qresource prefix="newPrefix">
+    <file>Sage_Corps_app.png</file>
+  </qresource>
+</RCC>
