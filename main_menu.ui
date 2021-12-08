@@ -14,7 +14,7 @@
    <string>Dialog</string>
   </property>
   <property name="styleSheet">
-   <string notr="true"> background-color:rgb(177,198,200);setWindowIcon:url(:/newPrefix/Sage_Corps_app.png);</string>
+   <string notr="true"> background-color:rgb(177,198,200);</string>
   </property>
   <widget class="QPushButton" name="findPatientIDButton">
    <property name="geometry">

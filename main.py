@@ -1,15 +1,15 @@
 import sys
 from PyQt5 import QtWidgets
 from PyQt5.QtGui import QPixmap
-from PyQt5.QtWidgets import QDialog, QApplication, QMessageBox
+from PyQt5.QtWidgets import QDialog, QApplication, QMessageBox, QCalendarWidget, QComboBox
 from PyQt5.uic import loadUi
 import prescription
 import add_patient
+import patient
 import mysql.connector
 import check_login
 from mysql.connector import Error
-
-
+from datetime import datetime
 
 host_name = 'localhost'
 user_name = 'root'
@@ -187,13 +187,20 @@ class userLoginWindow(QDialog):
         loadUi("user_login.ui", self)
         self.loginButton.clicked.connect(self.loginUser)
         self.user_password.setEchoMode(QtWidgets.QLineEdit.Password)
+        self.credentials = []
         
     def loginUser(self):
-        admin_credentials = [self.user_name.text(), self.user_password.text()]
-        
-        login_result = check_login.checkLogin(connection, admin_credentials)
-        self.popUpLoginWindow(login_result)
-        
+        if "patient" in self.user_name.text():
+            self.credentials = [int(self.user_name.text().split("_")[1]),self.user_name.text(), self.user_password.text()]
+            
+            login_result = check_login.checkPatientLogin(connection, self.credentials)
+            self.popUpLoginWindow(login_result)
+        elif "admin" in self.user_name.text():
+            self.credentials = [self.user_name.text(), self.user_password.text()]
+            
+            login_result = check_login.checkAdminLogin(connection, self.credentials)
+            self.popUpLoginWindow(login_result)
+    
     def popUpLoginWindow(self, login_result):
         loginPopUp = QMessageBox()
         loginPopUp.setWindowTitle("Login")
@@ -206,10 +213,19 @@ class userLoginWindow(QDialog):
             loginPopUp.setIcon(QMessageBox.Critical)
             loginPopUp.setText("Unsuccessful Login")
             loginPopUp.exec_()
+        elif login_result == 2:
+            loginPopUp.setText("Successfully logged in!")
+            loginPopUp.buttonClicked.connect(self.openpatientWindow)
+            loginPopUp.exec_()
             
     def openMainMenu(self):
         mainmenuWindow = MainMenu()
         widget.addWidget(mainmenuWindow)
+        widget.setCurrentIndex(widget.currentIndex()+1)
+    
+    def openpatientWindow(self):
+        patientWindow = patientMenu(self.credentials[0])
+        widget.addWidget(patientWindow)
         widget.setCurrentIndex(widget.currentIndex()+1)
         
 class MedicineMenu(QDialog):
@@ -248,7 +264,67 @@ class MainMenu(QDialog):
         medWindow = MedicineMenu()
         widget.addWidget(medWindow)
         widget.setCurrentIndex(widget.currentIndex()+1)
+
+class patientMenu(QDialog):
+    def __init__(self, patient_id):
+        super(patientMenu, self).__init__()
+        loadUi("patient_window.ui", self)
+        self.patient_id = 0
+        self.findName(patient_id)
+        self.patient_data = []
+        self.findDoctorButton.clicked.connect(self.findDoctors)
+        self.reserveSlotButton.clicked.connect(self.reserveSlot)
+        self.chosen_doctor = ''
+        self.date_selected = ''
+
+    def findName(self, patient_id):
+        self.patient_id = patient_id
+        data = patient.findPatientName(connection, self.patient_id)
+        self.name_label.setText(data[0])
+        self.patient_data = data[1]        
+
+    def findDoctors(self):
+        self.DoctorNameComboX.clear()
+        date = self.calendarWidget.selectedDate()
+        weekday = str(date.toPyDate().strftime('%A'))
+        self.date_selected = str(date.toPyDate())
+        doctors = patient.findDoctor(connection, weekday)
+
+        for i in doctors:
+            self.DoctorNameComboX.addItem(i)
+
         
+    def reserveSlot(self):
+        self.chosen_doctor = str(self.DoctorNameComboX.currentText())
+        
+        reservePopUp = QMessageBox()
+        reservePopUp.setWindowTitle("Reservation")
+        reservePopUp.setText("Choose online or offline appointment for Dr. "+self.chosen_doctor)
+        reservePopUp.setStandardButtons(QMessageBox.Yes|QMessageBox.No|QMessageBox.Cancel)
+        buttonOnline = reservePopUp.button(QMessageBox.Yes)
+        buttonOnline.setText('Online')
+        buttonOffline = reservePopUp.button(QMessageBox.No)
+        buttonOffline.setText('Offline')
+        reservePopUp.buttonClicked.connect(self.popup_button)
+        
+        reservePopUp.exec_()
+
+    def popup_button(self, i):
+        if i.text() == "Online":
+            patient.slotReservation(connection, "Online", self.chosen_doctor, str(self.date_selected))
+
+            finalPopup = QMessageBox()
+            finalPopup.setWindowTitle("Reservation")
+            finalPopup.setText("Your appointment with Dr. "+self.chosen_doctor+"for the date "+str(datetime.strptime(self.date_selected, '%Y-%m-%d').strftime('%d-%m-%Y')+" has been booked."))
+            finalPopup.setStandardButtons(QMessageBox.Yes|QMessageBox.Cancel)
+            buttonAddAnother = finalPopup.button(QMessageBox.Yes)
+            buttonAddAnother.setText('Add Another')
+
+            finalPopup.exec_()
+
+        elif i.text() == "Offline":
+            patient.slotReservation(connection, "Offline", self.chosen_doctor, str(self.date_selected))
+
 app = QApplication(sys.argv)
 mainwindow=userLoginWindow()
 widget = QtWidgets.QStackedWidget()
